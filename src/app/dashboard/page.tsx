@@ -68,6 +68,7 @@ export default function Dashboard() {
   // Resume Parsing States
   const [dragActive, setDragActive] = useState(false);
   const [resumeText, setResumeText] = useState<string | null>(null);
+  const [tempResumeText, setTempResumeText] = useState('');
   const [uploadingResume, setUploadingResume] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
 
@@ -85,6 +86,7 @@ export default function Dashboard() {
       const stored = localStorage.getItem('candidate_resume');
       if (stored) {
         setResumeText(stored);
+        setTempResumeText(stored);
       }
     }
 
@@ -106,6 +108,7 @@ export default function Dashboard() {
         
         if (data?.resume_text) {
           setResumeText(data.resume_text);
+          setTempResumeText(data.resume_text);
           localStorage.setItem('candidate_resume', data.resume_text);
         }
       } catch (err) {
@@ -167,66 +170,86 @@ export default function Dashboard() {
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
-      handleFileUpload(file);
+      await handleFileUpload(file);
     }
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      handleFileUpload(file);
+      await handleFileUpload(file);
     }
   };
 
-  // Standard HTML5 FileReader Upload Handler (No external PDF packages required)
-  const handleFileUpload = (file: File) => {
+  // Multimodal File Upload Handler
+  const handleFileUpload = async (file: File) => {
     setUploadingResume(true);
-    setUploadStatus('Reading file content...');
+    setUploadStatus(`Uploading and parsing ${file.name.split('.').pop()?.toUpperCase()}...`);
     
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      const finalText = text || file.name;
-      
-      setResumeText(finalText);
-      localStorage.setItem('candidate_resume', finalText);
-      setUploadStatus('Resume loaded successfully!');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
 
-      // Update Supabase profile if logged in
-      if (user) {
-        supabase
-          .from('profiles')
-          .update({ resume_text: finalText })
-          .eq('id', user.id)
-          .then(({ error }) => {
-            if (error) console.error('Supabase profile update failed:', error);
-          });
+      const res = await fetch('/api/resume/parse', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to parse file.');
       }
-      setUploadingResume(false);
-    };
 
-    reader.onerror = () => {
-      setUploadStatus('Failed to read upload file.');
-      setUploadingResume(false);
-    };
+      const parsedText = data.text;
+      setResumeText(parsedText);
+      setTempResumeText(parsedText);
+      localStorage.setItem('candidate_resume', parsedText);
+      setUploadStatus('Resume details loaded successfully!');
 
-    reader.readAsText(file);
+      if (user) {
+        await supabase
+          .from('profiles')
+          .update({ resume_text: parsedText })
+          .eq('id', user.id);
+      }
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('File parser error:', error);
+      setUploadStatus(`Parsing failed: ${error.message || 'Error occurred'}`);
+    } finally {
+      setUploadingResume(false);
+    }
   };
 
-  // Direct Text Paste / Edit Handler
-  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const text = e.target.value;
-    setResumeText(text);
-    localStorage.setItem('candidate_resume', text);
+  // Direct Text Paste / Edit Save Handler
+  const handleSaveResume = async () => {
+    setUploadingResume(true);
+    setUploadStatus('Saving resume details...');
 
-    if (user) {
-      supabase
-        .from('profiles')
-        .update({ resume_text: text })
-        .eq('id', user.id)
-        .then(({ error }) => {
-          if (error) console.error('Supabase profile update failed:', error);
-        });
+    try {
+      const text = tempResumeText.trim();
+      setResumeText(text || null);
+      
+      if (text) {
+        localStorage.setItem('candidate_resume', text);
+      } else {
+        localStorage.removeItem('candidate_resume');
+      }
+
+      if (user) {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ resume_text: text || null })
+          .eq('id', user.id);
+        if (error) throw error;
+      }
+
+      setUploadStatus('Resume saved successfully!');
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('Save failed:', error);
+      setUploadStatus(`Save failed: ${error.message || 'Check database connection'}`);
+    } finally {
+      setUploadingResume(false);
     }
   };
 
@@ -308,7 +331,7 @@ export default function Dashboard() {
             </form>
           </div>
 
-          {/* DRAG-AND-DROP RESUME parsing card with Framer Motion morphing animations */}
+          {/* Multimodal Resume Card with morphing spring animations */}
           <motion.div
             whileHover={{ scale: 1.015, translateY: -2 }}
             transition={{ type: 'spring', stiffness: 350, damping: 22 }}
@@ -332,10 +355,26 @@ export default function Dashboard() {
               <h3 className="text-sm font-bold text-white uppercase tracking-wider">Personalize with Resume</h3>
             </div>
 
+            {/* Formats Badges */}
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              <span className="rounded-md bg-zinc-950 border border-zinc-850 px-2 py-0.5 text-[9px] text-zinc-400 font-semibold">
+                PDF
+              </span>
+              <span className="rounded-md bg-zinc-950 border border-zinc-850 px-2 py-0.5 text-[9px] text-zinc-400 font-semibold">
+                DOCX
+              </span>
+              <span className="rounded-md bg-zinc-950 border border-zinc-850 px-2 py-0.5 text-[9px] text-zinc-400 font-semibold">
+                PNG/JPG
+              </span>
+              <span className="rounded-md bg-zinc-950 border border-zinc-850 px-2 py-0.5 text-[9px] text-zinc-400 font-semibold">
+                TXT
+              </span>
+            </div>
+
             <label className="group block relative border border-dashed border-zinc-800 rounded-xl p-6 text-center hover:border-zinc-700 bg-zinc-950/40 cursor-pointer transition-all duration-300">
               <input
                 type="file"
-                accept=".pdf,.txt,.doc,.docx,.md"
+                accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.txt"
                 onChange={handleFileChange}
                 disabled={uploadingResume}
                 className="hidden"
@@ -350,27 +389,46 @@ export default function Dashboard() {
                 <div className="flex flex-col items-center gap-2 py-1.5">
                   <FileText className="h-8 w-8 text-zinc-500 group-hover:text-emerald-400 group-hover:scale-105 transition-all duration-300" />
                   <span className="text-xs text-zinc-400 font-medium mt-1">
-                    Drag & drop PDF/text resume here, or <span className="text-emerald-400 group-hover:underline">browse</span>
+                    Drag &amp; drop files here, or <span className="text-emerald-400 group-hover:underline">browse</span>
                   </span>
-                  <span className="text-[10px] text-zinc-650">Supported: PDF, TXT, MD</span>
+                  <span className="text-[10px] text-zinc-650">Supports: PDF, DOCX, Images, TXT</span>
                 </div>
               )}
             </label>
 
-            {/* Direct text-paste editor */}
+            {/* Direct text editor / override paste block */}
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+              <label className="text-[10px] font-bold text-zinc-450 uppercase tracking-wider block">
                 Or Paste / Edit Resume Details
               </label>
               <textarea
-                value={resumeText || ''}
-                onChange={handleTextareaChange}
+                value={tempResumeText}
+                onChange={(e) => setTempResumeText(e.target.value)}
                 placeholder="Paste key projects, technical languages, libraries, and tools from your resume here to tailor AI questions directly..."
                 className="w-full h-32 resize-none rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 text-xs text-zinc-300 placeholder-zinc-600 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors font-mono leading-relaxed"
               />
             </div>
 
-            {/* If resume is loaded, show dynamic loaded status and text snippets preview */}
+            <div className="flex items-center justify-between gap-4">
+              <button
+                type="button"
+                onClick={handleSaveResume}
+                disabled={uploadingResume}
+                className="flex items-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-4 py-2.5 text-xs font-semibold text-white transition-colors disabled:opacity-55 shadow-md shadow-emerald-950/10"
+              >
+                Save Changes
+              </button>
+
+              {uploadStatus && !uploadingResume && (
+                <span className={`text-xs font-semibold ${
+                  uploadStatus.includes('successfully') ? 'text-emerald-400' : 'text-zinc-500'
+                }`}>
+                  {uploadStatus}
+                </span>
+              )}
+            </div>
+
+            {/* If resume is loaded, show success status check card */}
             <AnimatePresence>
               {resumeText && !uploadingResume && (
                 <motion.div
@@ -384,7 +442,7 @@ export default function Dashboard() {
                     <CheckCircle2 className="h-4 w-4 shrink-0" />
                     <span>Resume details loaded successfully!</span>
                   </div>
-                  <p className="text-[10px] text-zinc-500 font-mono line-clamp-2 leading-relaxed">
+                  <p className="text-[10px] text-zinc-550 font-mono line-clamp-2 leading-relaxed">
                     {resumeText}
                   </p>
                 </motion.div>
