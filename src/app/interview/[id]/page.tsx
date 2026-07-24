@@ -490,7 +490,7 @@ export default function InterviewRoom() {
           {/* Chat Feed Header */}
           <div className="border-b border-zinc-850 bg-zinc-950/40 px-6 py-3.5 flex justify-between items-center shrink-0">
             <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">Interview Transcript</span>
-            <span className="text-[10px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400 font-mono">Gemini AI Active</span>
+            <span className="text-[10px] bg-emerald-950/80 px-2 py-0.5 rounded text-emerald-400 font-mono border border-emerald-800/40">AI Recruiter Online</span>
           </div>
 
           {/* Conversation Bubble List */}

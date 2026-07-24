@@ -24,7 +24,7 @@ export async function POST(req: Request) {
 
     const genAI = new GoogleGenerativeAI(apiKey);
 
-    let systemInstruction = `You are an empathetic yet rigorous technical interviewer conducting a mock interview.
+    let systemInstruction = `You are Alex, a Senior Technical Recruiter, conducting a mock interview.
 The candidate is interviewing for the role: "${role}" at the experience level: "${level}".
 Your goals:
 1. Ask clear, targeted, and relevant technical and behavioral questions one at a time.
@@ -55,7 +55,7 @@ Goal 6: Personalize the interview by tailoring technical and behavioral question
     if (formattedHistory.length === 0) {
       // First call (greeting / initial question)
       const result = await model.generateContent(
-        'Please introduce yourself, state the role you are interviewing the candidate for, and ask the first question.'
+        'Please introduce yourself as Alex, Senior Technical Recruiter, state the role you are interviewing the candidate for, and ask the first question.'
       );
       const text = result.response.text().trim();
       return NextResponse.json({ text });

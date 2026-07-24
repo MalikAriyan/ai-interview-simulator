@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { supabase } from '../../../lib/supabaseClient';
 import {
   Radar,
   RadarChart,
@@ -70,6 +71,47 @@ export default function InterviewFeedback() {
         if (data.error) throw new Error(data.error);
 
         setEvaluation(data);
+
+        // Real-time Dashboard Sync: update interview status and score locally
+        if (typeof window !== 'undefined') {
+          const storedSessions = localStorage.getItem('interview_sessions');
+          if (storedSessions) {
+            try {
+              const sessions = JSON.parse(storedSessions);
+              const idx = sessions.findIndex((s: { id: string }) => s.id === id);
+              if (idx !== -1) {
+                sessions[idx].status = 'completed';
+                sessions[idx].score = data.overall_score;
+                localStorage.setItem('interview_sessions', JSON.stringify(sessions));
+              } else {
+                const newSession = {
+                  id: id,
+                  role: 'Frontend Dev',
+                  level: 'Senior',
+                  status: 'completed',
+                  created_at: new Date().toISOString(),
+                  score: data.overall_score
+                };
+                localStorage.setItem('interview_sessions', JSON.stringify([newSession, ...sessions]));
+              }
+            } catch (e) {
+              console.error('Local history sync failed:', e);
+            }
+          }
+        }
+
+        // Real-time Dashboard Sync: update interview status and score in Supabase
+        try {
+          await supabase
+            .from('interviews')
+            .update({
+              status: 'completed',
+              score: data.overall_score
+            })
+            .eq('id', id);
+        } catch (dbErr) {
+          console.warn('Supabase evaluation sync failed (bypassed):', dbErr);
+        }
       } catch (err: unknown) {
         console.error(err);
         setErrorMsg('Failed to process AI evaluation. Please verify your connection and try again.');

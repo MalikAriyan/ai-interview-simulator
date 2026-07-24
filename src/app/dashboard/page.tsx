@@ -119,6 +119,72 @@ export default function Dashboard() {
     fetchResume();
   }, [user]);
 
+  // Fetch interviews history from Supabase or localStorage
+  useEffect(() => {
+    const fetchInterviews = async () => {
+      let sessions: MockInterview[] = [];
+      
+      // 1. Load from localStorage first as fallback/local-first
+      if (typeof window !== 'undefined') {
+        const storedSessions = localStorage.getItem('interview_sessions');
+        if (storedSessions) {
+          try {
+            sessions = JSON.parse(storedSessions);
+          } catch (e) {
+            console.error('Failed to parse local sessions:', e);
+          }
+        }
+      }
+
+      // 2. Load from Supabase if logged in and merge/overwrite
+      if (user) {
+        try {
+          const { data, error } = await supabase
+            .from('interviews')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false });
+
+          if (data && !error) {
+            // Map db columns to MockInterview interface
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const dbSessions: MockInterview[] = data.map((item: any) => ({
+              id: item.id,
+              role: item.role,
+              level: item.level,
+              status: item.status,
+              created_at: item.created_at,
+              score: item.score
+            }));
+            
+            // Merge db sessions with local sessions, prioritizing database sessions by ID
+            const merged = [...dbSessions];
+            sessions.forEach((local) => {
+              if (!merged.some((m) => m.id === local.id)) {
+                merged.push(local);
+              }
+            });
+            sessions = merged.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+          }
+        } catch (dbErr) {
+          console.warn('Could not fetch interviews from Supabase, using local history:', dbErr);
+        }
+      }
+
+      // Fallback to initial mock data if there are no sessions at all (new user experience)
+      if (sessions.length === 0) {
+        sessions = INITIAL_MOCK_INTERVIEWS;
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('interview_sessions', JSON.stringify(INITIAL_MOCK_INTERVIEWS));
+        }
+      }
+
+      setInterviews(sessions);
+    };
+
+    fetchInterviews();
+  }, [user]);
+
   const handleStartInterview = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -146,6 +212,17 @@ export default function Dashboard() {
       } catch (err) {
         console.error('Bypassed DB save:', err);
       }
+    }
+
+    // Save to localStorage so dashboard history state updates immediately
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('interview_sessions');
+      let currentList = [];
+      if (stored) {
+        try { currentList = JSON.parse(stored); } catch {}
+      }
+      currentList = [newSession, ...currentList];
+      localStorage.setItem('interview_sessions', JSON.stringify(currentList));
     }
 
     setInterviews((prev) => [newSession, ...prev]);
