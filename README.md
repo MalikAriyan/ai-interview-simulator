@@ -1,5 +1,8 @@
 # AI Interview Simulator - Debate-Style Prep Platform
 
+🔗 **Live Demo:** 
+                [ai-interview-simulator-19vv.vercel.app](https://ai-interview-simulator-19vv.vercel.app/)
+
 An advanced, dark-themed responsive web application built with **Next.js 15 (App Router)** that conducts personalized, debate-style mock technical interviews. By analyzing the candidate's resume, the platform structures realistic production scenario questions, tracks and grades response accuracy in real-time, probes on partial answers, and provides visual evaluation critiquing using **Recharts Radar charts**—powered by **Gemini 2.5 Flash / 1.5 Flash Latest API**.
 
 ---
