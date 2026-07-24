@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 
+// Force the API route to execute in the standard Node.js runtime instead of Vercel Edge
+export const runtime = 'nodejs';
+
 // Polyfill DOMMatrix globally on the server side before importing pdf-parse.
 // This prevents cjs crashes because pdf-parse tries to resolve canvas dependencies.
 if (typeof global !== 'undefined' && !('DOMMatrix' in global)) {
@@ -24,6 +27,10 @@ export async function POST(req: Request) {
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+
+    if (buffer.length === 0) {
+      return NextResponse.json({ error: 'The uploaded PDF file is empty.' }, { status: 400 });
+    }
 
     // Extract text from the PDF buffer
     const pdfData = await pdfParse(buffer);
