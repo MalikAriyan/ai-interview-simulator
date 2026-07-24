@@ -167,85 +167,66 @@ export default function Dashboard() {
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
-      if (file.type === 'application/pdf') {
-        await uploadAndParseResume(file);
-      } else {
-        alert('Invalid file format. Please upload a PDF resume.');
-      }
+      handleFileUpload(file);
     }
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      if (file.type === 'application/pdf') {
-        await uploadAndParseResume(file);
-      } else {
-        alert('Invalid file format. Please upload a PDF resume.');
-      }
+      handleFileUpload(file);
     }
   };
 
-  // Client-Side PDF Upload and Parser Handler
-  const uploadAndParseResume = async (file: File) => {
+  // Standard HTML5 FileReader Upload Handler (No external PDF packages required)
+  const handleFileUpload = (file: File) => {
     setUploadingResume(true);
-    setUploadStatus('Reading PDF file...');
+    setUploadStatus('Reading file content...');
     
-    try {
-      const fileReader = new FileReader();
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      const finalText = text || file.name;
       
-      const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
-        fileReader.onload = () => resolve(fileReader.result as ArrayBuffer);
-        fileReader.onerror = () => reject(fileReader.error);
-        fileReader.readAsArrayBuffer(file);
-      });
-
-      setUploadStatus('Loading PDF engine...');
-      // Dynamically import pdfjs-dist client-side only to bypass Next.js SSR build crashes
-      const pdfjs = await import('pdfjs-dist');
-      pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@6.1.200/build/pdf.worker.min.mjs`;
-
-      setUploadStatus('Parsing document text...');
-      const loadingTask = pdfjs.getDocument({ data: new Uint8Array(arrayBuffer) });
-      const pdf = await loadingTask.promise;
-      let fullText = '';
-
-      for (let i = 1; i <= pdf.numPages; i++) {
-        setUploadStatus(`Parsing page ${i} of ${pdf.numPages}...`);
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .map((item: any) => item.str || '')
-          .join(' ');
-        fullText += pageText + '\n';
-      }
-
-      const parsedText = fullText.trim();
-      if (!parsedText) {
-        throw new Error('No readable text content found in the PDF.');
-      }
-
-      setResumeText(parsedText);
-      localStorage.setItem('candidate_resume', parsedText);
-
-      setUploadStatus('Updating your profile...');
+      setResumeText(finalText);
+      localStorage.setItem('candidate_resume', finalText);
+      setUploadStatus('Resume loaded successfully!');
 
       // Update Supabase profile if logged in
       if (user) {
-        await supabase
+        supabase
           .from('profiles')
-          .update({ resume_text: parsedText })
-          .eq('id', user.id);
+          .update({ resume_text: finalText })
+          .eq('id', user.id)
+          .then(({ error }) => {
+            if (error) console.error('Supabase profile update failed:', error);
+          });
       }
-
-      setUploadStatus('Resume loaded successfully!');
-    } catch (err: unknown) {
-      const error = err as Error;
-      console.error('Client-side PDF parse error:', error);
-      setUploadStatus(`Parsing failed: ${error.message || 'Check file format'}`);
-    } finally {
       setUploadingResume(false);
+    };
+
+    reader.onerror = () => {
+      setUploadStatus('Failed to read upload file.');
+      setUploadingResume(false);
+    };
+
+    reader.readAsText(file);
+  };
+
+  // Direct Text Paste / Edit Handler
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const text = e.target.value;
+    setResumeText(text);
+    localStorage.setItem('candidate_resume', text);
+
+    if (user) {
+      supabase
+        .from('profiles')
+        .update({ resume_text: text })
+        .eq('id', user.id)
+        .then(({ error }) => {
+          if (error) console.error('Supabase profile update failed:', error);
+        });
     }
   };
 
@@ -354,7 +335,7 @@ export default function Dashboard() {
             <label className="group block relative border border-dashed border-zinc-800 rounded-xl p-6 text-center hover:border-zinc-700 bg-zinc-950/40 cursor-pointer transition-all duration-300">
               <input
                 type="file"
-                accept="application/pdf"
+                accept=".pdf,.txt,.doc,.docx,.md"
                 onChange={handleFileChange}
                 disabled={uploadingResume}
                 className="hidden"
@@ -369,12 +350,25 @@ export default function Dashboard() {
                 <div className="flex flex-col items-center gap-2 py-1.5">
                   <FileText className="h-8 w-8 text-zinc-500 group-hover:text-emerald-400 group-hover:scale-105 transition-all duration-300" />
                   <span className="text-xs text-zinc-400 font-medium mt-1">
-                    Drag & drop PDF resume here, or <span className="text-emerald-400 group-hover:underline">browse</span>
+                    Drag & drop PDF/text resume here, or <span className="text-emerald-400 group-hover:underline">browse</span>
                   </span>
-                  <span className="text-[10px] text-zinc-650">PDF format maximum 5MB</span>
+                  <span className="text-[10px] text-zinc-650">Supported: PDF, TXT, MD</span>
                 </div>
               )}
             </label>
+
+            {/* Direct text-paste editor */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+                Or Paste / Edit Resume Details
+              </label>
+              <textarea
+                value={resumeText || ''}
+                onChange={handleTextareaChange}
+                placeholder="Paste key projects, technical languages, libraries, and tools from your resume here to tailor AI questions directly..."
+                className="w-full h-32 resize-none rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 text-xs text-zinc-300 placeholder-zinc-600 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors font-mono leading-relaxed"
+              />
+            </div>
 
             {/* If resume is loaded, show dynamic loaded status and text snippets preview */}
             <AnimatePresence>
@@ -383,11 +377,12 @@ export default function Dashboard() {
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="rounded-xl border border-emerald-950 bg-emerald-950/10 p-3 space-y-2 flex flex-col"
+                  className="rounded-xl border border-emerald-950 bg-emerald-950/10 p-3 space-y-2 flex flex-col cursor-default"
+                  onClick={(e) => e.stopPropagation()} // Prevent trigger upload click
                 >
                   <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400">
                     <CheckCircle2 className="h-4 w-4 shrink-0" />
-                    <span>Resume parsed successfully!</span>
+                    <span>Resume details loaded successfully!</span>
                   </div>
                   <p className="text-[10px] text-zinc-500 font-mono line-clamp-2 leading-relaxed">
                     {resumeText}
