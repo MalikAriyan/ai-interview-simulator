@@ -186,23 +186,46 @@ export default function Dashboard() {
     }
   };
 
-  // POST Upload Handler
+  // Client-Side PDF Upload and Parser Handler
   const uploadAndParseResume = async (file: File) => {
     setUploadingResume(true);
-    setUploadStatus('Uploading and parsing PDF...');
+    setUploadStatus('Reading PDF file...');
     
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const res = await fetch('/api/resume/parse', {
-        method: 'POST',
-        body: formData
+      const fileReader = new FileReader();
+      
+      const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+        fileReader.onload = () => resolve(fileReader.result as ArrayBuffer);
+        fileReader.onerror = () => reject(fileReader.error);
+        fileReader.readAsArrayBuffer(file);
       });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
 
-      const parsedText = data.text;
+      setUploadStatus('Loading PDF engine...');
+      // Dynamically import pdfjs-dist client-side only to bypass Next.js SSR build crashes
+      const pdfjs = await import('pdfjs-dist');
+      pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@6.1.200/build/pdf.worker.min.mjs`;
+
+      setUploadStatus('Parsing document text...');
+      const loadingTask = pdfjs.getDocument({ data: new Uint8Array(arrayBuffer) });
+      const pdf = await loadingTask.promise;
+      let fullText = '';
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        setUploadStatus(`Parsing page ${i} of ${pdf.numPages}...`);
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .map((item: any) => item.str || '')
+          .join(' ');
+        fullText += pageText + '\n';
+      }
+
+      const parsedText = fullText.trim();
+      if (!parsedText) {
+        throw new Error('No readable text content found in the PDF.');
+      }
+
       setResumeText(parsedText);
       localStorage.setItem('candidate_resume', parsedText);
 
@@ -219,9 +242,8 @@ export default function Dashboard() {
       setUploadStatus('Resume loaded successfully!');
     } catch (err: unknown) {
       const error = err as Error;
-      console.error(error);
-      setUploadStatus('Parsing failed.');
-      alert(error.message || 'An error occurred during resume parsing.');
+      console.error('Client-side PDF parse error:', error);
+      setUploadStatus(`Parsing failed: ${error.message || 'Check file format'}`);
     } finally {
       setUploadingResume(false);
     }
