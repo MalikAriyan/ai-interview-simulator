@@ -1,17 +1,13 @@
-# AI Interview Simulator MVP
+# AI Interview Simulator - Debate-Style Prep Platform
 
-🔗 **Live Demo:** 
-                [ai-interview-simulator-19vv.vercel.app](https://ai-interview-simulator-19vv.vercel.app/)
-
-
-An advanced, dark-themed responsive web application built with **Next.js 15 (App Router)** that conducts personalized technical mock interviews. It translates user answers in real-time using browser speech-to-text, queries the **Gemini 1.5 Flash API** to generate empathetic yet rigorous follow-up questions, speaks responses using speech-synthesis, and provides structured evaluation reviews with **Recharts Radar visual charts**.
+An advanced, dark-themed responsive web application built with **Next.js 15 (App Router)** that conducts personalized, debate-style mock technical interviews. By analyzing the candidate's resume, the platform structures realistic production scenario questions, tracks and grades response accuracy in real-time, probes on partial answers, and provides visual evaluation critiquing using **Recharts Radar charts**—powered by **Gemini 2.5 Flash / 1.5 Flash Latest API**.
 
 ---
 
 ## Technical Stack & Badges
 
 ![Next.js 15](https://img.shields.io/badge/Next.js-15.5-black?style=flat-square&logo=next.js)
-![Gemini API](https://img.shields.io/badge/Gemini_API-1.5_Flash-blue?style=flat-square&logo=googlegemini&logoColor=white)
+![Gemini 2.5 / 1.5 Latest API](https://img.shields.io/badge/Gemini_API-2.5_Flash_/_1.5_Latest-blue?style=flat-square&logo=googlegemini&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Auth%20%26%20Database-emerald?style=flat-square&logo=supabase)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38bdf8?style=flat-square&logo=tailwindcss)
 ![Framer Motion](https://img.shields.io/badge/Framer_Motion-Transitions-purple?style=flat-square&logo=framer&logoColor=white)
@@ -23,33 +19,37 @@ An advanced, dark-themed responsive web application built with **Next.js 15 (App
 
 ```mermaid
 graph TD
-    A[Candidate Dashboard] -->|Uploads PDF Resume| B[PDF Parsing Route: /api/resume/parse]
-    B -->|Saves parsed text| C[Supabase profiles.resume_text / LocalStorage]
-    A -->|Configures target Role & Level| D[Interview Room]
-    D -->|Web Speech API STT| D
-    D -->|Post response + Resume Context| E[Chat API Route: /api/interview/chat]
-    E -->|Gemini 1.5 Flash Prompt| E
-    E -->|Next Question| D
-    D -->|Speech Synthesis TTS| D
-    D -->|End Session| F[Evaluation API Route: /api/interview/evaluate]
-    F -->|Gemini JSON Schema Analysis| F
-    F -->|Radar Chart & Critique Reports| G[Feedback Results Page]
+    A[Candidate Dashboard] -->|Uploads PDF/Docx/Image Resume| B[Multimodal Parser Route: /api/resume/parse]
+    B -->|Local text fallback if API fails| C[Supabase profiles / LocalStorage]
+    A -->|Initiates target Role & Level| D[Interview Prep Room]
+    D -->|Real-time Web Speech STT| D
+    D -->|Post response + Resume details| E[Adaptive Chat Route: /api/interview/chat]
+    E -->|Gemini 1.5 Flash Latest Engine| E
+    E -->|Evaluates response + Next Question| D
+    D -->|Real-time Accuracy Indicator| D
+    D -->|Web Speech Synthesis TTS| D
+    D -->|End Interview / Auto-Conclude| F[Evaluation Route: /api/interview/evaluate]
+    F -->|Dual-Schema Critique Report| G[Feedback Results page]
+    G -->|Radar Chart & Summary stats| G
+    G -->|Updates Status & Score| H[Supabase interviews / LocalStorage history]
+    H -->|Syncs list in real-time| A
 ```
 
-1. **Dashboard & Customization**: Configure target roles (e.g. Frontend Developer), select experience levels (Junior, Mid, Senior, Lead), and drag-and-drop a PDF resume to personalize questions.
+1. **Dashboard & Customization**: Configure target roles (e.g. Frontend Developer), select experience levels (Junior, Mid, Senior, Lead), and drag-and-drop a PDF, docx, image, or text resume to personalize questions.
 2. **Interactive Room**: Features a real-time canvas-based audio visualizer (using the browser's Web Audio API `AnalyserNode`), ticking 15-minute countdown timers, and glassmorphic conversation transcripts.
 3. **AI Chat Pipeline**: Translates client audio streams, extracts resume keywords (e.g. TypeScript, Docker), and prompts Gemini to ask targeted, concise situational and code-oriented technical questions.
 4. **Structured JSON Analysis**: Translates chat history transcripts into scores and strengths utilizing Gemini schemas.
 
 ---
 
-## Core Features
+## Key Features
 
-- 🎙️ **Real-Time Speech-to-Text**: Voice-to-text transcribing directly inside the browser using the browser-native `webkitSpeechRecognition` API.
-- 🔊 **Auto-Play Voice Synthesis**: Utters AI questions out loud using browser native `speechSynthesis`.
-- 📂 **Drag-and-Drop PDF Parsing**: Drag-and-drop a PDF resume, parse it server-side using `pdf-parse`, and persist the data in Supabase.
-- 🎨 **Modern Micro-interactions**: Smooth page layout transitions, pulsing microphone buttons, and a Canvas-based frequency visualizer.
-- 📊 **Dynamic Competency Radar**: Renders technical accuracy, communication, and problem-solving metrics side-by-side using Recharts.
+- 📄 **Smart PDF Resume Parsing**: Drag-and-drop file uploader accepting PDFs, Word documents (`.docx`), images, and raw text files. Powered by `mammoth` and Gemini multimodal OCR inline base64 data to extract skills, project involvement, and professional summaries.
+- 🎯 **Live Per-Question Accuracy Rating**: For every single user answer, the AI calculates an accuracy score (0-100%) and provides immediate, constructive feedback formatted right inside the transcript.
+- ⚔️ **Adaptive Debate & Probing Mode**: If a response scores below 80%, the AI Senior Lead Engineer persona retains the current scenario question, challenging the candidate's logic or asking them to debug further until they resolve it or choose to skip.
+- 🎙️ **Voice & Speech Integration**: Real-time browser-native speech-to-text transcription (`webkitSpeechRecognition`) coupled with custom-modulated speech synthesis (`speechSynthesis`) for a completely hand-free, immersive mock interview session.
+- 📊 **Dynamic Competency Radar Charts**: Leverages `Recharts` to draw polar radar graphs grading candidate performance across Technical Accuracy, Communication, and Problem Solving based on their responses.
+- 📂 **Dashboard & History Management**: A comprehensive simulated session history list that syncs results in real-time from Supabase and `localStorage`. Features session status tags, cumulative score averages, session resuming options, and instant session deletes.
 
 ---
 
