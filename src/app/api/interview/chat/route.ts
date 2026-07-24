@@ -2,8 +2,18 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
+  let role = 'Frontend Dev';
+  let level = 'Senior';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let history: any[] = [];
+  let resumeText = '';
+
   try {
-    const { role, level, history, resumeText } = await req.json();
+    const body = await req.json();
+    role = body.role || role;
+    level = body.level || level;
+    history = body.history || history;
+    resumeText = body.resumeText || resumeText;
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey || apiKey.startsWith('AIzaSy_placeholder') || apiKey.includes('placeholder') || apiKey === 'AIzaSy...') {
@@ -31,7 +41,7 @@ Goal 6: Personalize the interview by tailoring technical and behavioral question
     }
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-1.5-flash',
       systemInstruction: systemInstruction,
     });
 
@@ -67,11 +77,15 @@ Goal 6: Personalize the interview by tailoring technical and behavioral question
     return NextResponse.json({ text });
   } catch (error: unknown) {
     const err = error as Error;
-    console.error('Error in interview chat API:', err);
-    return NextResponse.json(
-      { error: err.message || 'An error occurred during generative processing.' },
-      { status: 500 }
-    );
+    console.error('Error in interview chat API, falling back to simulated interviewer:', err);
+    try {
+      return simulateInterviewerResponse(role, level, history, resumeText);
+    } catch {
+      return NextResponse.json(
+        { error: err.message || 'An error occurred during generative processing.' },
+        { status: 500 }
+      );
+    }
   }
 }
 
