@@ -31,7 +31,7 @@ Goal 6: Personalize the interview by tailoring technical and behavioral question
     }
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       systemInstruction: systemInstruction,
     });
 

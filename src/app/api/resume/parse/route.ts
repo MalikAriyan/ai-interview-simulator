@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     let extractedText = '';
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const promptText = `Analyze the uploaded resume document and extract a comprehensive, structured text summary.
 Include:
