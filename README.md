@@ -1,5 +1,9 @@
 # AI Interview Simulator MVP
 
+🔗 **Live Demo:** 
+                [ai-interview-simulator-19vv.vercel.app](https://ai-interview-simulator-19vv.vercel.app/)
+
+
 An advanced, dark-themed responsive web application built with **Next.js 15 (App Router)** that conducts personalized technical mock interviews. It translates user answers in real-time using browser speech-to-text, queries the **Gemini 1.5 Flash API** to generate empathetic yet rigorous follow-up questions, speaks responses using speech-synthesis, and provides structured evaluation reviews with **Recharts Radar visual charts**.
 
 ---
