@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { supabase } from '../../../lib/supabaseClient';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Mic,
@@ -43,6 +44,7 @@ export default function InterviewRoom() {
   const [isVideoActive, setIsVideoActive] = useState(false);
   const [isTTSActive, setIsTTSActive] = useState(true);
   const [isAISpeaking, setIsAISpeaking] = useState(false);
+  const [scores, setScores] = useState<number[]>([]);
 
   // References
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -397,6 +399,48 @@ export default function InterviewRoom() {
       setChatHistory(finalHistory);
       localStorage.setItem(`interview_transcript_${id}`, JSON.stringify(finalHistory));
       
+      // Real-time Cumulative Score Update Sync
+      const accuracyMatch = aiText.match(/🎯 Answer Accuracy:\s*(\d+)%/i);
+      if (accuracyMatch) {
+        const latestScore = parseInt(accuracyMatch[1], 10);
+        setScores((prevScores) => {
+          const newScores = [...prevScores, latestScore];
+          const cumulativeAverage = Math.round(newScores.reduce((a, b) => a + b, 0) / newScores.length);
+          
+          // Save to localStorage
+          if (typeof window !== 'undefined') {
+            const stored = localStorage.getItem('interview_sessions');
+            if (stored) {
+              try {
+                const sessions = JSON.parse(stored);
+                const idx = sessions.findIndex((s: { id: string }) => s.id === id);
+                if (idx !== -1) {
+                  sessions[idx].score = cumulativeAverage;
+                  localStorage.setItem('interview_sessions', JSON.stringify(sessions));
+                }
+              } catch (e) {
+                console.error('Local cumulative score sync failed:', e);
+              }
+            }
+          }
+
+          // Save to Supabase
+          (async () => {
+            try {
+              const { error } = await supabase
+                .from('interviews')
+                .update({ score: cumulativeAverage })
+                .eq('id', id);
+              if (error) console.warn('Supabase real-time score sync bypassed:', error);
+            } catch (dbErr) {
+              console.warn('Supabase real-time score sync exception bypassed:', dbErr);
+            }
+          })();
+
+          return newScores;
+        });
+      }
+      
       speakAIResponse(aiText);
     } catch (err: unknown) {
       console.error(err);
@@ -443,6 +487,16 @@ export default function InterviewRoom() {
         </div>
 
         <div className="flex items-center justify-between sm:justify-end gap-6">
+          {/* Real-time cumulative score indicator */}
+          {scores.length > 0 && (
+            <div className="flex items-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-950/60 px-3.5 py-1.5 text-xs font-semibold text-zinc-400">
+              <span className="text-[10px] uppercase text-zinc-500 font-bold">Accuracy Rating:</span>
+              <span className="text-sm font-extrabold text-emerald-400">
+                {Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)}%
+              </span>
+            </div>
+          )}
+
           {/* Glowing Countdown Timer */}
           <div
             className={`flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-sm font-semibold border transition-all duration-300 ${
