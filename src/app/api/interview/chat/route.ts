@@ -24,25 +24,28 @@ export async function POST(req: Request) {
 
     const genAI = new GoogleGenerativeAI(apiKey);
 
-    let systemInstruction = `You are Alex, a Senior Technical Recruiter, conducting a mock interview.
+    let systemInstruction = `You are Alex, a Senior Lead Engineer, conducting a live mock technical interview.
 The candidate is interviewing for the role: "${role}" at the experience level: "${level}".
+
 Your goals:
-1. Ask clear, targeted, and relevant technical and behavioral questions one at a time.
-2. Be empathetic and supportive but maintain high rigorous standards.
-3. Keep your questions concise (1-2 sentences maximum). Do not write paragraphs or explanations.
-4. Listen to the candidate's responses. Feel free to follow up on their previous answer to probe deeper if their answer is vague, incomplete, or interesting, before moving to a new topic.
-5. Do not output feedback, evaluations, or grades during the chat. Save evaluations for the end of the interview.`;
+1. Conduct a deeply realistic technical interview by asking real-world, production scenario questions based on the selected role and the candidate's resume (e.g. debugging concurrency/deadlocks, diagnosing memory leaks, handling race conditions, optimizing high-load renders, scaling database reads, or resolving CORS/Auth session edge cases). Avoid basic definitions or academic textbook queries.
+2. Adaptive Feedback Loop: For every candidate response after the first question, you MUST explicitly evaluate their previous answer before moving to the next question. State clearly if the response was "Fully Correct", "Partially Correct", or "Incorrect / Missing Key Points". Briefly explain what was missed or how to improve it in a professional, constructive manner. Then, transition smoothly into the next realistic technical scenario question.
+3. Keep your questions and explanations extremely concise (3 sentences maximum).
+4. Personalize the interview by tailoring scenario questions directly to the tools, achievements, and technology stack listed in the candidate's resume.`;
 
     if (resumeText) {
-      systemInstruction += `\n\nCandidate Background:
+      systemInstruction += `\n\nCandidate Resume / Background Info:
 ${resumeText}
 
-Goal 6: Personalize the interview by tailoring technical and behavioral questions directly to the projects, languages, architectures, frameworks, and tools listed on the candidate's resume above. Probe their deep technical involvement in the projects they mention.`;
+Goal 5: Integrate tools, framework versions, architectures, and projects mentioned in the candidate's resume above into your scenario-based questions. Probe their deep technical involvement in the systems they claim to have built.`;
     }
 
     const model = genAI.getGenerativeModel({
       model: 'gemini-1.5-flash',
       systemInstruction: systemInstruction,
+      generationConfig: {
+        temperature: 0.85
+      }
     });
 
     // Format chat history for Gemini
@@ -55,7 +58,7 @@ Goal 6: Personalize the interview by tailoring technical and behavioral question
     if (formattedHistory.length === 0) {
       // First call (greeting / initial question)
       const result = await model.generateContent(
-        'Please introduce yourself as Alex, Senior Technical Recruiter, state the role you are interviewing the candidate for, and ask the first question.'
+        'Please introduce yourself as Alex, Senior Lead Engineer, state the role you are interviewing the candidate for, and start the interview by asking the first real-world production scenario question based on their resume/background.'
       );
       const text = result.response.text().trim();
       return NextResponse.json({ text });
@@ -94,8 +97,7 @@ function simulateInterviewerResponse(role: string, level: string, history: { sen
   const count = history ? history.filter((h: { sender: string }) => h.sender === 'user').length : 0;
   let text = '';
 
-  // Parse a skill from the resume text for dynamic mockup response
-  let specialTopic = '';
+  let specialTopic = 'system architecture';
   if (resumeText) {
     const lower = resumeText.toLowerCase();
     if (lower.includes('typescript')) specialTopic = 'TypeScript compilation and typing';
@@ -107,19 +109,13 @@ function simulateInterviewerResponse(role: string, level: string, history: { sen
   }
 
   if (count === 0) {
-    text = `Hello! Welcome to your mock interview for the ${level} ${role} position. ${specialTopic ? `I noticed on your resume you have experience with ${specialTopic}. ` : ''}Let's start with a general question: can you explain your background and your experience with key technologies in this domain?`;
+    text = `Hello! I'm Alex, Senior Lead Engineer. Welcome to your mock technical interview for the ${level} ${role} position. Let's kick off with a production scenario: in a previous project, how did you identify and resolve a performance bottleneck or memory leak?`;
   } else if (count === 1) {
-    if (specialTopic) {
-      text = `Excellent. Let's drill into the experience you mentioned. Could you describe a challenging problem you faced related to ${specialTopic} in one of your projects, and how you resolved it?`;
-    } else if (role.toLowerCase().includes('frontend') || role.toLowerCase().includes('react')) {
-      text = `Excellent. Let's dive into some frontend topics. Can you explain the difference between client-side rendering (CSR) and server-side rendering (SSR) in Next.js, and when you would choose one over the other?`;
-    } else {
-      text = `Great. Let's talk system design. How would you design a rate-limiting system for a high-traffic public API to prevent abuse?`;
-    }
+    text = `[Partially Correct] That is a reasonable high-level approach, but you missed describing how you profiled the leak (e.g. heap snapshots or flame graphs). Let's move to the next scenario: how would you handle a race condition where multiple concurrent client edits overwrite each other on a shared backend resource?`;
   } else if (count === 2) {
-    text = `That is a solid explanation. How do you approach error handling and ensuring service stability in those scenarios?`;
+    text = `[Fully Correct] Excellent. Utilizing optimistic locking or transactional queues is exactly the right production mitigation. Next, could you walk me through how you would set up responsive layouts and bundle optimization on a project using ${specialTopic || 'your core libraries'}?`;
   } else {
-    text = `Thank you for those insights. We have covered a good range of topics. I would like to conclude the interview here. Feel free to click "End Interview" to see your evaluation report!`;
+    text = `[Fully Correct] Thank you for those insights. We have covered a good range of production scenarios. I would like to conclude the interview here. Feel free to click "End Interview" to see your evaluation report!`;
   }
 
   return NextResponse.json({ text });
