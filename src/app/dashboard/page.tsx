@@ -19,7 +19,8 @@ import {
   UploadCloud,
   FileText,
   CheckCircle2,
-  Loader2
+  Loader2,
+  Trash2
 } from 'lucide-react';
 
 interface MockInterview {
@@ -339,6 +340,37 @@ export default function Dashboard() {
     }
   };
 
+  // Delete Interview Record Handler
+  const handleDeleteInterview = async (interviewId: string) => {
+    // 1. Update React state immediately
+    setInterviews((prev) => prev.filter((s) => s.id !== interviewId));
+
+    // 2. Remove from local storage
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('interview_sessions');
+      if (stored) {
+        try {
+          const sessions = JSON.parse(stored);
+          const filtered = sessions.filter((s: { id: string }) => s.id !== interviewId);
+          localStorage.setItem('interview_sessions', JSON.stringify(filtered));
+        } catch (e) {
+          console.error('Local history clean failed:', e);
+        }
+      }
+      localStorage.removeItem(`interview_transcript_${interviewId}`);
+    }
+
+    // 3. Remove from Supabase
+    try {
+      await supabase
+        .from('interviews')
+        .delete()
+        .eq('id', interviewId);
+    } catch (dbErr) {
+      console.warn('Supabase interview delete failed (bypassed):', dbErr);
+    }
+  };
+
   return (
     <div className="space-y-10 py-4">
       {/* Header Banner */}
@@ -583,19 +615,29 @@ export default function Dashboard() {
                     </div>
                   )}
 
-                  <button
-                    onClick={() => {
-                      if (session.status === 'completed') {
-                        router.push(`/feedback/${session.id}`);
-                      } else {
-                        router.push(`/interview/${session.id}?role=${encodeURIComponent(session.role)}&level=${encodeURIComponent(session.level)}`);
-                      }
-                    }}
-                    className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-emerald-400 hover:bg-emerald-950/40 hover:text-emerald-300 transition-colors"
-                  >
-                    <span>{session.status === 'completed' ? 'View Results' : 'Resume'}</span>
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        if (session.status === 'completed') {
+                          router.push(`/feedback/${session.id}`);
+                        } else {
+                          router.push(`/interview/${session.id}?role=${encodeURIComponent(session.role)}&level=${encodeURIComponent(session.level)}`);
+                        }
+                      }}
+                      className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-emerald-400 hover:bg-emerald-950/40 hover:text-emerald-300 transition-colors"
+                    >
+                      <span>{session.status === 'completed' ? 'View Results' : 'Resume'}</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </button>
+
+                    <button
+                      onClick={() => handleDeleteInterview(session.id)}
+                      className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-950/20 transition-colors"
+                      title="Delete Session"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
