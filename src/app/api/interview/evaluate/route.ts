@@ -1,14 +1,21 @@
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import { NextResponse } from 'next/server';
+import { supabase } from '../../../../lib/supabaseClient';
+
+export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
+  let interviewId = '';
   try {
-    const { interview_id: _interview_id, transcript } = await req.json();
+    const { interview_id, transcript } = await req.json();
+    interviewId = interview_id;
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey || apiKey.startsWith('AIzaSy_placeholder') || apiKey.includes('placeholder') || apiKey === 'AIzaSy...') {
       // Return a structured mock evaluation response in local simulation mode
-      return NextResponse.json(getMockEvaluationResponse(transcript));
+      const mockResult = getMockEvaluationResponse(transcript);
+      await saveCompletedStatus(interviewId, mockResult.overall_score);
+      return NextResponse.json(mockResult);
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
@@ -54,28 +61,59 @@ export async function POST(req: Request) {
       .map((msg: { sender: string; message: string }) => `${msg.sender === 'ai' ? 'AI Interviewer' : 'Candidate'}: ${msg.message}`)
       .join('\n\n');
 
-      const prompt = `Analyze this technical interview transcript and generate a structured evaluation report.
+    const prompt = `Analyze this technical interview transcript and generate a structured evaluation report.
 Assess the candidate's performance across Technical Accuracy, Communication, and Problem Solving.
 
 Transcript:
 ${formattedTranscript}
 `;
 
-      try {
-        const result = await model.generateContent(prompt);
-        const text = result.response.text();
-        const evaluationData = JSON.parse(text);
-        return NextResponse.json(evaluationData);
-      } catch (geminiErr) {
-        console.warn('Gemini evaluation generation failed (using structured fallback):', geminiErr);
-        return NextResponse.json(getMockEvaluationResponse(transcript));
-      }
-    } catch (error: unknown) {
-      const err = error as Error;
-      console.error('Error in interview evaluation API:', err);
-      return NextResponse.json(getMockEvaluationResponse([]));
+    try {
+      const result = await model.generateContent(prompt);
+      const text = result.response.text();
+      const evaluationData = JSON.parse(text);
+
+      // Create dual-compatible keys for safety
+      const finalData = {
+        ...evaluationData,
+        score: evaluationData.overall_score ?? 80,
+        feedback: evaluationData.detailed_feedback ?? 'Great session!',
+        strengths: evaluationData.key_strengths ?? ['Relevant experience'],
+        improvements: evaluationData.areas_for_improvement ?? ['Elaborate on edge cases']
+      };
+
+      await saveCompletedStatus(interviewId, finalData.score);
+      return NextResponse.json(finalData);
+    } catch (geminiErr) {
+      console.warn('Gemini evaluation generation failed (using structured fallback):', geminiErr);
+      const fallbackResult = getMockEvaluationResponse(transcript);
+      await saveCompletedStatus(interviewId, fallbackResult.overall_score);
+      return NextResponse.json(fallbackResult);
     }
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error('Error in interview evaluation API:', err);
+    const globalFallback = getMockEvaluationResponse([]);
+    await saveCompletedStatus(interviewId, globalFallback.overall_score);
+    return NextResponse.json(globalFallback);
   }
+}
+
+// Helper to save completed state to Supabase
+async function saveCompletedStatus(id: string, score: number) {
+  if (!id) return;
+  try {
+    await supabase
+      .from('interviews')
+      .update({
+        status: 'completed',
+        score: score
+      })
+      .eq('id', id);
+  } catch (err) {
+    console.warn('Bypassed DB save during evaluate page load:', err);
+  }
+}
 
 function getMockEvaluationResponse(transcript: { sender: string; message: string }[]) {
   // Generate slightly dynamic scores based on length of transcript for realism
@@ -103,16 +141,25 @@ function getMockEvaluationResponse(transcript: { sender: string; message: string
     technical_accuracy_score: technical,
     communication_score: communication,
     problem_solving_score: problemSolving,
+    score: overall,
+    feedback: `You completed a short mock session. You demonstrated good fundamental knowledge of technical internals. To reach the next level, practice expanding your descriptions to cover advanced system patterns and edge cases.`,
+    detailed_feedback: `You completed a short mock session. You demonstrated good fundamental knowledge of technical internals. To reach the next level, practice expanding your descriptions to cover advanced system patterns and edge cases.`,
     key_strengths: [
-      "Demonstrates solid grasp of virtual DOM updates and rendering engine boundaries.",
-      "Clear differentiation between Next.js server-side and client-side rendering strategies.",
-      "Structured articulation of local state limits and architectural optimization."
+      "Demonstrates solid grasp of core technical principles.",
+      "Clear explanation of practical trade-offs and concepts.",
+      "Structured articulation of local state limits and optimization."
+    ],
+    strengths: [
+      "Demonstrates solid grasp of core technical principles.",
+      "Clear explanation of practical trade-offs and concepts."
     ],
     areas_for_improvement: [
       "Explain the exact computational complexity of the diffing cycles (e.g. O(n)).",
-      "Mention Incremental Static Regeneration (ISR) when optimizing for server load limits.",
-      "Utilize structural templates (STAR) when responding to conversational questions."
+      "Mention Incremental Static Regeneration (ISR) when optimizing for server load limits."
     ],
-    detailed_feedback: `You completed a short mock session. You demonstrated good fundamental knowledge of Frontend React internals. To reach the next level, practice expanding your descriptions to cover advanced Next.js patterns (Middleware, ISR, Server Components) and focus on keeping pacing consistent when answering under pressure.`
+    improvements: [
+      "Explain the exact computational complexity of the diffing cycles (e.g. O(n)).",
+      "Mention Incremental Static Regeneration (ISR) when optimizing for server load limits."
+    ]
   };
 }
